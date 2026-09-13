@@ -1,0 +1,6 @@
+# source paintings/photos are copyright - keep them local
+input/*
+!input/.gitkeep
+out/
+__pycache__/
+*.pyc
