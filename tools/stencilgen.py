@@ -229,47 +229,50 @@ def add_bridges(mask, bridge_px, per_island):
     and become mainland once bridged so chains of islands work."""
     mask = mask.copy()
     lab, islands, mainland, stats = find_islands(mask)
-    n_bridged = 0
+    # pixel lists per island, computed once
+    pix = {i: np.where(lab == i) for i in islands}
     remaining = set(islands)
+    n_bridged = 0
     while remaining:
         dist, labels, lut = nearest_mainland(mainland)
         # pick the island closest to the mainland
         best = None
         for i in remaining:
-            ys, xs = np.where(lab == i)
+            ys, xs = pix[i]
             d = dist[ys, xs]
             j = int(np.argmin(d))
             if best is None or d[j] < best[0]:
-                best = (d[j], i, ys, xs, j)
-        _, i, ys, xs, j = best
+                best = (d[j], i, j)
+        _, i, j = best
+        ys, xs = pix[i]
         remaining.discard(i)
         cy, cx = ys.mean(), xs.mean()
         p0 = (int(xs[j]), int(ys[j]))
         t0 = lut[labels[ys[j], xs[j]]]
-        cv2.line(mask, p0, (int(t0[1]), int(t0[0])), SHEET, int(round(bridge_px)))
         picks = [(p0, t0)]
         # further bridges: prefer the opposite side of the island
         v0 = np.array([p0[0] - cx, p0[1] - cy])
+        d = dist[ys, xs].astype(np.float64)
         for _ in range(per_island - 1):
             v = np.stack([xs - cx, ys - cy], axis=1)
             nv = np.linalg.norm(v, axis=1) + 1e-6
             cosang = (v @ v0) / (nv * (np.linalg.norm(v0) + 1e-6))
-            d = dist[ys, xs].astype(np.float64)
             for limit in (-0.3, 0.3, 1.1):
                 cand = np.where(cosang < limit)[0]
                 if len(cand):
                     jj = cand[int(np.argmin(d[cand]))]
                     p = (int(xs[jj]), int(ys[jj]))
                     t = lut[labels[ys[jj], xs[jj]]]
-                    cv2.line(mask, p, (int(t[1]), int(t[0])), SHEET, int(round(bridge_px)))
                     picks.append((p, t))
                     v0 = np.array([p[0] - cx, p[1] - cy])
                     break
-        mainland = mainland | (lab == i)
-        # the bridge lines themselves are mainland now
         for p, t in picks:
+            cv2.line(mask, p, (int(t[1]), int(t[0])), SHEET, int(round(bridge_px)))
             cv2.line(mainland.view(np.uint8), p, (int(t[1]), int(t[0])), 1, int(round(bridge_px)))
+        mainland[ys, xs] = True
         n_bridged += 1
+        if n_bridged % 25 == 0:
+            print(f"      bridged {n_bridged}/{len(islands)} islands", flush=True)
     return mask, n_bridged
 
 
@@ -383,6 +386,7 @@ def main(argv=None):
               "ground_rgb": list(ground), "separation": info, "layers": []}
 
     for l in layers:
+        print(f"  layer {l.index}: cleaning + bridging ...", flush=True)
         m = clean_mask(l.mask, min_feature_px, min_area_px, a.kerf_mm * ppm)
         lab, islands, _, stats = find_islands(m)
         islands_before = np.isin(lab, islands) if islands else None
