@@ -71,7 +71,15 @@ Example on the synthetic scene in `examples/` (source, light-grey layer, black k
 
 ![test scene layers](examples/test_scene_layers.png)
 
-Useful flags: `--max-height-mm` to fit a sheet, `--margin-mm` for the border,
+To cut on a fixed paper size, use `--sheet`: the image is scaled to fit inside
+the margin and centred, and the orientation that gives the biggest image is
+picked for you.
+
+```bash
+python3 tools/stencilgen.py input/contraption.png -o out_a4 --layers 4 --sheet A4 --margin-mm 15
+```
+
+Useful flags: `--sheet A4|A3|WxH` for a fixed sheet, `--max-height-mm` to fit a height, `--margin-mm` for the border,
 `--kerf-mm` if your tests show the cut growing, `--blur-mm` to kill canvas
 texture before splitting, `--seed` to get a different split.
 

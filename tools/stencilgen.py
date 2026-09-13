@@ -57,6 +57,10 @@ def parse_args(argv=None):
                    help="physical width of the printed image area")
     p.add_argument("--max-height-mm", type=float, default=None,
                    help="shrink to fit this height if the image is tall")
+    p.add_argument("--sheet", default=None,
+                   help="fix the stencil sheet size: A4, A3, A5, or WxH in mm (e.g. 300x400). "
+                        "The image is scaled to fit inside the margin and centred; "
+                        "overrides --width-mm. Orientation is chosen to give the biggest image")
     p.add_argument("--margin-mm", type=float, default=20.0,
                    help="blank stencil border around the image (holds registration marks)")
     p.add_argument("--px-per-mm", type=float, default=8.0,
@@ -108,18 +112,47 @@ def ellipse(diameter_px: float):
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (d, d))
 
 
-def load_and_size(path, width_mm, max_height_mm, ppm):
+PAPER = {"A5": (148.0, 210.0), "A4": (210.0, 297.0), "A3": (297.0, 420.0), "A2": (420.0, 594.0)}
+
+
+def parse_sheet(spec):
+    """'A4' -> (210, 297); '300x400' -> (300, 400)"""
+    if spec is None:
+        return None
+    key = spec.strip().upper()
+    if key in PAPER:
+        return PAPER[key]
+    try:
+        w, h = key.replace("MM", "").split("X")
+        return float(w), float(h)
+    except ValueError:
+        sys.exit(f"--sheet must be A5/A4/A3/A2 or WxH in mm, got {spec!r}")
+
+
+def load_and_size(path, width_mm, max_height_mm, ppm, sheet=None, margin_mm=0.0):
     img = Image.open(path).convert("RGB")
     w, h = img.size
-    img_w_mm = width_mm
-    img_h_mm = width_mm * h / w
-    if max_height_mm and img_h_mm > max_height_mm:
-        img_h_mm = max_height_mm
-        img_w_mm = max_height_mm * w / h
+    if sheet:
+        # pick the orientation that gives the bigger image, then fit inside the margins
+        best = None
+        for sw, sh in ((sheet[0], sheet[1]), (sheet[1], sheet[0])):
+            aw, ah = sw - 2 * margin_mm, sh - 2 * margin_mm
+            scale = min(aw / w, ah / h)
+            if best is None or scale > best[0]:
+                best = (scale, sw, sh)
+        scale, sw, sh = best
+        img_w_mm, img_h_mm = w * scale, h * scale
+        sheet = (sw, sh)
+    else:
+        img_w_mm = width_mm
+        img_h_mm = width_mm * h / w
+        if max_height_mm and img_h_mm > max_height_mm:
+            img_h_mm = max_height_mm
+            img_w_mm = max_height_mm * w / h
     W = int(round(img_w_mm * ppm))
     H = int(round(img_h_mm * ppm))
     img = img.resize((W, H), Image.LANCZOS)
-    return np.asarray(img), img_w_mm, img_h_mm
+    return np.asarray(img), img_w_mm, img_h_mm, sheet
 
 
 def kmeans(data: np.ndarray, k: int, seed: int):
@@ -286,7 +319,7 @@ def trace(mask, eps_px, ppm, offset_mm):
         c = cv2.approxPolyDP(c, eps_px, True)
         if len(c) < 3:
             continue
-        pts = c.reshape(-1, 2) / ppm + offset_mm
+        pts = c.reshape(-1, 2) / ppm + np.array(offset_mm)
         d = "M " + " L ".join(f"{x:.3f},{y:.3f}" for x, y in pts) + " Z"
         paths.append(d)
     return paths
@@ -296,7 +329,7 @@ def reg_marks_svg(sheet_w, sheet_h, margin, size):
     """crosshair-in-circle at each corner of the margin, identical on every layer"""
     r = size / 2
     out = []
-    c = margin / 2
+    c = max(margin / 2, r + 2)
     for (x, y) in [(c, c), (sheet_w - c, c), (c, sheet_h - c), (sheet_w - c, sheet_h - c)]:
         out.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r:.2f}"/>')
         out.append(f'<path d="M {x - r:.2f},{y:.2f} L {x + r:.2f},{y:.2f} '
@@ -304,7 +337,7 @@ def reg_marks_svg(sheet_w, sheet_h, margin, size):
     return "\n".join(out)
 
 
-def write_svg(path, paths, sheet_w, sheet_h, margin, img_w, img_h, reg_size, label):
+def write_svg(path, paths, sheet_w, sheet_h, margin, img_w, img_h, reg_size, label, ox, oy):
     body = "\n".join(f'<path d="{d}"/>' for d in paths)
     svg = f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="{sheet_w:.2f}mm" height="{sheet_h:.2f}mm"
@@ -315,13 +348,13 @@ def write_svg(path, paths, sheet_w, sheet_h, margin, img_w, img_h, reg_size, lab
     <rect x="0" y="0" width="{sheet_w:.2f}" height="{sheet_h:.2f}"/>
   </g>
   <g id="image-area" fill="none" stroke="#bbbbbb" stroke-width="0.1" stroke-dasharray="2,2">
-    <rect x="{margin:.2f}" y="{margin:.2f}" width="{img_w:.2f}" height="{img_h:.2f}"/>
+    <rect x="{ox:.2f}" y="{oy:.2f}" width="{img_w:.2f}" height="{img_h:.2f}"/>
   </g>
   <g id="registration" fill="none" stroke="#0000ff" stroke-width="0.1">
 {reg_marks_svg(sheet_w, sheet_h, margin, reg_size)}
   </g>
   <g id="label" font-family="sans-serif" font-size="4" fill="#000000">
-    <text x="{margin:.2f}" y="{margin * 0.55:.2f}">{label}</text>
+    <text x="{ox:.2f}" y="{max(oy * 0.55, 6):.2f}">{label}</text>
   </g>
   <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1" fill-rule="evenodd">
 {body}
@@ -385,7 +418,9 @@ def main(argv=None):
     ppm = a.px_per_mm
     os.makedirs(a.out, exist_ok=True)
 
-    rgb, img_w_mm, img_h_mm = load_and_size(a.image, a.width_mm, a.max_height_mm, ppm)
+    sheet = parse_sheet(a.sheet)
+    rgb, img_w_mm, img_h_mm, sheet = load_and_size(a.image, a.width_mm, a.max_height_mm,
+                                                   ppm, sheet, a.margin_mm)
     H, W = rgb.shape[:2]
     print(f"image area {img_w_mm:.1f} x {img_h_mm:.1f} mm  ({W} x {H} px)")
 
@@ -397,8 +432,13 @@ def main(argv=None):
         layers, info = colour_layers(rgb, a.layers, blur_px, a.seed, a.keep_lightest)
         ground = info["ground_rgb"]
 
-    sheet_w = img_w_mm + 2 * a.margin_mm
-    sheet_h = img_h_mm + 2 * a.margin_mm
+    if sheet:
+        sheet_w, sheet_h = sheet
+    else:
+        sheet_w = img_w_mm + 2 * a.margin_mm
+        sheet_h = img_h_mm + 2 * a.margin_mm
+    ox = (sheet_w - img_w_mm) / 2          # image is centred on the sheet
+    oy = (sheet_h - img_h_mm) / 2
     min_feature_px = a.min_feature_mm * ppm
     min_area_px = a.min_area_mm2 * ppm * ppm
     bridge_px = max(2, a.bridge_mm * ppm)
@@ -406,6 +446,7 @@ def main(argv=None):
     report = {"image": os.path.abspath(a.image), "mode": a.mode,
               "image_mm": [round(img_w_mm, 1), round(img_h_mm, 1)],
               "sheet_mm": [round(sheet_w, 1), round(sheet_h, 1)],
+              "image_offset_mm": [round(ox, 1), round(oy, 1)],
               "ground_rgb": list(ground), "separation": info, "layers": []}
 
     for l in layers:
@@ -425,10 +466,10 @@ def main(argv=None):
         coverage = float((m == CUT).mean() * 100)
 
         stem = f"layer{l.index:02d}_{l.name}"
-        paths = trace(m, a.simplify_mm * ppm, ppm, a.margin_mm)
+        paths = trace(m, a.simplify_mm * ppm, ppm, (ox, oy))
         write_svg(os.path.join(a.out, stem + ".svg"), paths, sheet_w, sheet_h,
                   a.margin_mm, img_w_mm, img_h_mm, a.reg_mark_mm,
-                  f"{stem}  spray order {l.index}/{len(layers)}  rgb{l.tone_rgb}")
+                  f"{stem}  spray order {l.index}/{len(layers)}  rgb{l.tone_rgb}", ox, oy)
         layer_preview_png(os.path.join(a.out, stem + ".png"), m, islands_before)
 
         report["layers"].append({

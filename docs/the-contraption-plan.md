@@ -7,6 +7,14 @@ Size assumed: A3 image area (280 x 296 mm, the painting is nearly square),
 python3 tools/stencilgen.py input/contraption.jpg -o out --layers 4 --width-mm 280 --blur-mm 0.6
 ```
 
+On A4 card the image is 180 x 190 mm. Everything is 35 % smaller, so drop
+the minimum feature to match or the frame tubes and the small figure go:
+
+```bash
+python3 tools/stencilgen.py input/contraption.png -o out_a4 --layers 4 --sheet A4 \
+    --margin-mm 15 --min-feature-mm 0.9 --bridge-mm 2 --blur-mm 0.4
+```
+
 ## Ground
 
 Titanium white with a small amount of yellow ochre and a speck of ivory
