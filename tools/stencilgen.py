@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 CUT = 255     # pixel value meaning "cut out / paint goes here"
 SHEET = 0     # pixel value meaning "stencil material stays"
@@ -346,6 +346,29 @@ def layer_preview_png(path, mask, islands_before):
     Image.fromarray(img).save(path)
 
 
+
+def swatch_card_png(path, ground_rgb, layers, mode):
+    """one row per paint: ground first, then the stencils in spray order.
+    Shows the target colour, hex, and a mixing hint."""
+    rows = [("ground / base coat (brush on)", ground_rgb)] + \
+           [(f"layer {l.index:02d}  {l.name}  (spray {l.index}/{len(layers)})", l.tone_rgb)
+            for l in layers]
+    W, rh, sw = 900, 90, 260
+    img = Image.new("RGB", (W, rh * len(rows) + 20), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+    for k, (label, rgb) in enumerate(rows):
+        y = 10 + k * rh
+        d.rectangle([10, y, 10 + sw, y + rh - 10], fill=tuple(rgb), outline=(0, 0, 0))
+        r, g, b = rgb
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        if mode == "tone":
+            hint = f"greyscale {lum:.0f}/255  ->  roughly {100 - lum / 2.55:.0f}% black in white"
+        else:
+            hint = f"luminance {lum:.0f}/255"
+        for i, t in enumerate([label, f"rgb({r}, {g}, {b})   #{r:02x}{g:02x}{b:02x}", hint]):
+            d.text((sw + 30, y + 8 + i * 24), t, fill=(0, 0, 0))
+    img.save(path)
+
 def composite_preview_png(path, shape, ground_rgb, layers):
     img = np.empty(shape + (3,), np.uint8)
     img[:] = ground_rgb
@@ -417,10 +440,16 @@ def main(argv=None):
               + (f"  ** {l.notes}" if l.notes else ""))
 
     composite_preview_png(os.path.join(a.out, "preview_composite.png"), (H, W), ground, layers)
+    swatch_card_png(os.path.join(a.out, "swatches.png"), ground, layers, a.mode)
     Image.fromarray(rgb).save(os.path.join(a.out, "preview_source.png"))
     with open(os.path.join(a.out, "report.json"), "w") as f:
         json.dump(report, f, indent=2)
-    print(f"ground / base coat rgb{tuple(ground)}")
+    print()
+    print("PAINT PER STENCIL (also in swatches.png and report.json)")
+    print(f"  ground / base coat   rgb{tuple(ground)}   brush on, let cure")
+    for l in layers:
+        r, g, b = l.tone_rgb
+        print(f"  layer {l.index:02d} {l.name:<9} rgb({r:3d},{g:3d},{b:3d})  #{r:02x}{g:02x}{b:02x}   spray {l.index}/{len(layers)}")
     print(f"wrote {len(layers)} layers to {a.out}/  (sheet {sheet_w:.0f} x {sheet_h:.0f} mm)")
 
 

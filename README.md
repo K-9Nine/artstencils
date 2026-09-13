@@ -39,6 +39,7 @@ Output in `out/`:
 | `layer01_tone1.svg` … `layer04_tone4.svg` | one cut file per layer, mm units, sprayed in numeric order |
 | `layerNN_*.png` | preview of each stencil (black = cut away, red outline = island that was bridged) |
 | `preview_composite.png` | what the sprayed result should look like before hand colour |
+| `swatches.png` | the paint colour for the ground and for each stencil, with hex and a mixing hint |
 | `report.json` | cut-region counts, islands bridged, paint tone per layer, thresholds |
 
 Every SVG has the same sheet size and the same four blue registration marks,
