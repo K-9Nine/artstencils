@@ -66,6 +66,16 @@ Material:
 | 220 gsm card | one-off pieces or tests. Swells if you flood it |
 | oiled manila | traditional, handles nicely, cuts with a bit of smoke |
 
+**Diode lasers (Ortur, xTool D1, Atomstack and similar):** blue light goes
+straight through clear Mylar, so it will not cut. Use 220 to 300 gsm kraft
+or grey card, oiled manila, or opaque blue/black "diode-safe" stencil film.
+White card reflects blue light and needs more passes. Put a sacrificial
+sheet under the work, tape every edge down, use air assist if you have it,
+and stay with the machine: an open frame and card is a fire waiting for a
+lifted corner. Starting points in mm/min, one 10 mm test square first:
+5 W optical 300 mm/min at 90 % two passes; 10 W 600 mm/min at 80 % one
+pass; 20 W 1200 mm/min at 70 % one pass, all for 220 gsm kraft card.
+
 Never cut PVC or anything that says "vinyl" without checking. Chlorinated
 plastics release chlorine gas in a laser and wreck the machine and you. Mylar
 and PET are fine.
@@ -76,6 +86,14 @@ test grid first. You want the cut to just part, not flare. Cut on a honeycomb
 bed or on a sheet of card so the backside does not get flashback. Cut the blue
 registration marks as through-cuts on every layer. Cut the red image last so
 the sheet stays flat while the marks are cut.
+
+Putting every layer in the same place: tape an L-shaped corner stop to the
+bed (front-left on a GRBL machine like an Ortur). In LightBurn set Start
+From to Absolute Coords, drag the first layer so its green outline sits a
+few mm inside the stop, and note the X/Y. Put every other layer at the same
+X/Y. Then push each card into the stop, tape the edges, frame, and cut.
+The card does not need to be centred; the marks land in the same place on
+every sheet because the sheet is in the same place and the file is too.
 
 Order of operations in LightBurn: registration (blue) then cut (red). Delete
 the green outline and the grey image box or set them to no output.
