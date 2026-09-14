@@ -10,6 +10,7 @@ The plan for that specific piece is in [docs/the-contraption-plan.md](docs/the-c
 
 ```
 tools/stencilgen.py   image -> cleaned, bridged, registered SVGs per layer + previews
+tools/reticle.py      rifle-scope reticle (posts, mil-dots, red centre) as A4 stencil pieces
 docs/method.md        the full workflow: image prep, cutting, registration, spraying, hand colour
 docs/the-contraption-plan.md   layer-by-layer plan for this painting and the Just Eat twist
 examples/             synthetic test scene so you can try the tool without a source image
@@ -93,3 +94,18 @@ repositionable adhesive on the back of each stencil. Brush in the colour notes
 by hand from the five-colour palette. Cut the contemporary twist (the Just Eat
 logo, courier bag, phone) as one more stencil and spray it last. Details in
 [docs/method.md](docs/method.md).
+
+## Scope reticle overlay
+
+For the "stag in the crosshairs" twist. Paint the thin cross by hand or with
+a straight edge first, then cut the pieces:
+
+```bash
+python3 tools/reticle.py --canvas-mm 1000 -o out_reticle   # measure the canvas width
+```
+
+One A4 sheet holds three pieces: a POST (cut once, use for all four edges),
+a DOTS strip (cut once, use on all four arms) and the red CENTRE dot. Every
+piece has a 2 mm viewing slot to line up on the painted cross. The magenta
+crossbar on the post is only cut for the bottom post. The full reticle is
+also written as one reference SVG in case you can cut it at full size.
